@@ -17,7 +17,7 @@ const pairsList=["XMRBTC", "ETHBTC", "ZECBTC", "XRPBTC", "ETCBTC"];
 
 var pairs = {}
 
-const backtest = true;
+const backtest = false;
 const prevValues={};
 const period = 1800*1000;
 const stopLossCoeff = 0.017;
@@ -128,15 +128,22 @@ Manager.prototype.runBot = function(){
 			}
 		}else{
 			console.log("backtest is OFF, live data is ON");
-			setInterval(function(){
-				if(!self.runBlock){
-					for(var pair in pairs){
-						bfx.getTicker(pair, function(respair, data){
-						analyzeData(self, respair,data);
-						});
+			var delay = period - Date.now() % period;
+			console.log("Start in "+delay/60000+" minutes");
+			setTimeout(function(){
+				console.log("Bot is working");
+				setInterval(function(){
+					if(!self.runBlock){
+						for(var pair in pairs){
+							bfx.getTicker(pair, function(respair, data){
+								analyzeData(self, respair,data);
+							});
+						}
 					}
-				}
-			}, period);
+				}, period);
+
+			}, delay);
+			
 		}
 };
 
@@ -175,7 +182,7 @@ function analyzeData(self, respair,data){
 		// fix losses
 		}else if(close < pairs[respair]["stopLossPrice"]){
 			loss++;
-			closeLongPosition(respair, close);
+			closeLongPosition(respair, pairs[respair]["stopLossPrice"]);
 		}
 	}else if(pairs[respair]["short"]){
 		//close short position at profit
@@ -185,7 +192,7 @@ function analyzeData(self, respair,data){
 		//fix losses
 		}else if(close > pairs[respair]["stopLossPrice"]){
 			loss++;
-			closeShortPosition(respair, close);
+			closeShortPosition(respair, pairs[respair]["stopLossPrice"]);
 		}
 	}
 
@@ -203,6 +210,7 @@ function openLongPosition(respair, close){
 			pairs[respair]["entryPrice"] = close;
 			console.tag("Result").log("Opened long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Stop loss price " +pairs[respair]["stopLossPrice"]);
+			console.tag("Result").log("----------------------------------------------------");
 			pairs[respair]["long"] = true;
 								
 		}else{
@@ -211,6 +219,8 @@ function openLongPosition(respair, close){
 				pairs[respair]["entryPrice"] = close;
 				console.tag("Result").log("Opened long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 				console.tag("Result").log("Stop loss price " +pairs[respair]["stopLossPrice"]);
+				console.tag("Result").log("----------------------------------------------------");
+
 				pairs[respair]["long"] = true;
 									
 			});
@@ -229,6 +239,8 @@ function openShortPosition(respair,close){
 			pairs[respair]["entryPrice"] = close;
 			console.tag("Result").log("Opened short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Stop loss price " +pairs[respair]["stopLossPrice"]);
+			console.tag("Result").log("----------------------------------------------------");
+
 			pairs[respair]["short"] = true;
 								
 		}else{
@@ -237,6 +249,8 @@ function openShortPosition(respair,close){
 				pairs[respair]["entryPrice"] = close;
 				console.tag("Result").log("Opened short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 				console.tag("Result").log("Stop loss price " +pairs[respair]["stopLossPrice"]);
+				console.tag("Result").log("----------------------------------------------------");
+
 				pairs[respair]["short"] = true;
 									
 			});
@@ -251,6 +265,8 @@ function closeLongPosition(respair, close){
 			console.tag("Result").log("Closed long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Result amount " +bfx.initAmout);
 			console.tag("Result").log("Success " +success+" Loss "+loss);
+			console.tag("Result").log("----------------------------------------------------");
+
 			pairs[respair]["long"] = false;
 			pairs[respair]["entryPrice"] = 0;
 			pairs[respair]["entryAmount"] = 0; //temp
@@ -260,6 +276,8 @@ function closeLongPosition(respair, close){
 				console.tag("Result").log("Closed long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 				console.tag("Result").log("Result amount " +bfx.initAmout);
 				console.tag("Result").log("Success " +success+" Loss "+loss);
+				console.tag("Result").log("----------------------------------------------------");
+
 				pairs[respair]["long"] = false
 				pairs[respair]["entryPrice"] = 0;
 				pairs[respair]["entryAmount"] = 0;//temp
@@ -278,6 +296,8 @@ function closeShortPosition(respair, close){
 			console.tag("Result").log("Closed short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Result amount " +bfx.initAmout);
 			console.tag("Result").log("Success " +success+" Loss "+loss);
+			console.tag("Result").log("----------------------------------------------------");
+
 			pairs[respair]["short"] = false;
 			pairs[respair]["entryPrice"] = 0;
 			pairs[respair]["entryAmount"] = 0; //temp
@@ -287,6 +307,8 @@ function closeShortPosition(respair, close){
 				console.tag("Result").log("Closed short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 				console.tag("Result").log("Result amount " +bfx.initAmout);
 				console.tag("Result").log("Success " +success+" Loss "+loss);
+				console.tag("Result").log("----------------------------------------------------");
+
 				pairs[respair]["short"] = false
 				pairs[respair]["entryPrice"] = 0;
 				pairs[respair]["entryAmount"] = 0;//temp
