@@ -1,0 +1,21 @@
+{
+  "name": "ma-bot",
+  "version": "0.0.2",
+  "private": true,
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "body-parser": "1.15.2",
+    "cfenv": "1.0.x",
+    "ejs": "0.8.5",
+    "express": "^4.15.4",
+    "nonce": "1.0.4",
+    "request": "2.78.0",
+    "scribe-js": "2.0.4",
+    "socket.io": "1.4.5",
+    "technicalindicators": "^1.0.20",
+    "underscore": "1.6.0"
+  },
+  "repository": {}
+}

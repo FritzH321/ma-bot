@@ -1,0 +1,203 @@
+
+var fs = require('fs');
+var bfxTrade =  require("./markets/BitfinexTrade");
+var bfx = new bfxTrade();
+
+var utils = require("./utils");
+
+const SMA = require('technicalindicators').SMA;
+var smaSArray={};
+var smaLArray={};
+
+var console = process.console;
+const TAG = "Manager";
+const pairs=["XMRBTC", "ETHBTC", "ZECBTC", "XRPBTC", "DSHBTC"];
+//minimal amounts to buy
+const limits = {
+	"ETHBTC" : 0.01,
+	"DSHBTC" : 0.01,
+	"LTCBTC" : 0.1,
+	"ZECBTC" : 0.01,
+	"ETCBTC" : 0.1,
+	"XMRBTC" : 0.1,
+	"XRPBTC" : 10
+}
+
+
+const backtest = false;
+const prevValues={};
+const period = 1800*1000;
+const stopLossCoeff = 0.983;
+const tradeCoeff = 1;
+
+var success =0;
+var loss=0;
+
+
+function Manager(){
+	
+	this.runBlock = true;
+	this.tradeBlock = false;
+	
+
+	console.log("Initializing list of pairs ");
+	
+	for(var pair of pairs){
+		prevValues[pair]={smaS: -Infinity,
+						smaL: Infinity};
+		
+				
+	}
+	
+	var self =this;
+
+	//intializing balances
+	bfx.updateBalance(function(){
+		console.log("Initializing sma values ");
+
+		for(pair of pairs){
+			bfx.getHistData(pair, period/60000, 100, function(respair, data){
+				
+				var long = data;
+				var short = data.slice(data.length-10);
+				var larray = [];
+				var sarray = [];
+				for (var l of long){
+					larray.push(l[2])
+				}
+				for (var s of short){
+					sarray.push(s[2])
+				}
+				smaLArray[respair] = new SMA({period : 100, values : larray});
+				
+				smaSArray[respair] = new SMA({period : 10, values : sarray});
+				
+				
+			});
+		}
+
+		setTimeout(function(){
+
+			self.runBlock = false;
+			console.tag("Trade").log("runBlock "+self.runBlock);
+		},10000)
+		
+
+		
+	});
+
+	
+	
+}
+
+
+
+Manager.prototype.runBot = function(){
+	
+		var self = this;
+		console.log("Starting bot");
+		if(backtest){
+			console.log("backtest is ON, live data is OFF");
+			var marketData = JSON.parse(fs.readFileSync(__dirname+'/BFX_ETHBTC_30m.json', 'utf8'));
+			
+			for(var candle of marketData){
+				
+				analyzeData(self, "ETHBTC",candle[2]);
+			}
+		}else{
+			console.log("backtest is OFF, live data is ON");
+			setInterval(function(){
+				if(!self.runBlock){
+					for(var pair of pairs){
+						bfx.getTicker(pair, function(respair, data){
+						analyzeData(self, respair,data);
+						});
+					}
+				}
+			}, period);
+		}
+	
+	
+	
+
+};
+
+
+/**
+	Function for buy and sell signal analysis
+	@self - context
+	@respair - pair to analyze
+	@data  - close value
+**/
+function analyzeData(self, respair, data){
+	var smaS = smaSArray[respair].nextValue(data);
+	var smaL = smaLArray[respair].nextValue(data);
+
+
+				// console.log(respair," data ", data," smaS ", smaS," smaL ", smaL);
+				
+	// buying
+	if(!self.tradeBlock && 
+			prevValues[respair]["smaS"] <prevValues[respair]["smaL"] && 
+			smaS> smaL && 
+			bfx.mode=="buy"){
+
+		var amount = bfx.getBalance(respair)*tradeCoeff;
+		if (amount/data >= limits[respair]*1.002){
+		
+			bfx.trade(respair, data, amount, function(){
+				bfx.updateBalance(function(){
+					bfx.stopLossPrice = data*stopLossCoeff;
+					console.tag("Result").log("Bought "+respair+" " +utils.round(amount/data,5)+" at "+ data);
+					console.tag("Result").log("Stop loss price " +bfx.stopLossPrice);
+					self.tradeBlock = true;
+				});
+			});
+		}else{
+			console.tag("Trade").log(respair, " insuficient amount of BTC ", amount, " Scipping trade");
+
+		}
+					
+					
+	//selling with profit
+	}else if(bfx.tradingPair == respair && 
+			smaS < smaL && 
+			bfx.buyPrice*1.005 < data && 
+			bfx.mode=="sell"){
+
+		var amount = bfx.getBalance(respair);
+		bfx.trade(respair, data, amount, function(){
+			bfx.updateBalance(function(){
+				success++;
+				console.tag("Result").log("Sold "+respair+" " +amount+" at "+ data);
+				console.tag("Result").log("Success " +success+" Loss "+loss);
+				self.tradeBlock = false;
+			});
+		});
+					
+					
+	//stop loss selling			
+	} else if(bfx.tradingPair == respair && 
+			data < bfx.stopLossPrice && 
+			bfx.mode=="sell"){
+
+		var amount = bfx.getBalance(respair);
+		bfx.trade(respair, bfx.stopLossPrice,  amount, function(){
+			bfx.updateBalance(function(){
+				loss++;
+				console.tag("Result").log("Sold "+respair+" " +amount+" at "+ bfx.stopLossPrice);
+				console.tag("Result").log("Success " +success+" Loss "+loss);
+				self.tradeBlock = false;
+			});
+		});
+					
+					
+	}
+	prevValues[respair]["smaS"]=smaS;
+	prevValues[respair]["smaL"]=smaL;
+
+}
+
+
+
+module.exports = Manager;
