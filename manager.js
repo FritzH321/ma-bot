@@ -13,12 +13,12 @@ const ADX = require('technicalindicators').ADX;
 
 var console = process.console;
 const TAG = "Manager";
-const pairsList=["XMRBTC", "ETHBTC", "ZECBTC", "XRPBTC", "ETCBTC"];
+var pairsList=["XMRBTC", "ETHBTC", "ZECBTC", "LTCBTC", "ETCBTC", "DSHBTC"];
 
 var pairs = {}
+var prevValues={};
 
 const backtest = false;
-const prevValues={};
 const period = 1800*1000;
 const stopLossCoeff = 0.017;
 const tradeCoeff = 1;
@@ -38,6 +38,10 @@ function Manager(){
 	
 	this.runBlock = true;
 	console.log("Initializing list of pairs ");
+	//reduce pairs list only for backtesting
+	if(backtest){
+		pairsList = ["ETHBTC"];
+	}
 	
 	 for(var pair of pairsList){
 	 	pairs[pair] = {
@@ -262,9 +266,11 @@ function openShortPosition(respair,close){
 function closeLongPosition(respair, close){
 	bfx.testTrade(respair, close, pairs[respair]["entryAmount"], "sell", function(){
 		if(backtest){
+			var hpr = close/pairs[respair]["entryPrice"];
 			console.tag("Result").log("Closed long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Result amount " +bfx.initAmout);
 			console.tag("Result").log("Success " +success+" Loss "+loss);
+			console.tag("Result").log("HPR " +hpr);
 			console.tag("Result").log("----------------------------------------------------");
 
 			pairs[respair]["long"] = false;
@@ -273,9 +279,11 @@ function closeLongPosition(respair, close){
 			pairs[respair]["stopLossPrice"]=0
 		}else{
 			bfx.updateBalance(function(){
+				var hpr = close/pairs[respair]["entryPrice"];
 				console.tag("Result").log("Closed long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 				console.tag("Result").log("Result amount " +bfx.initAmout);
 				console.tag("Result").log("Success " +success+" Loss "+loss);
+				console.tag("Result").log("HPR " +hpr);
 				console.tag("Result").log("----------------------------------------------------");
 
 				pairs[respair]["long"] = false
@@ -293,9 +301,11 @@ function closeLongPosition(respair, close){
 function closeShortPosition(respair, close){
 	bfx.testTrade(respair, close, pairs[respair]["entryAmount"], "buy", function(){
 		if(backtest){
+			var hpr = pairs[respair]["entryPrice"]/close;
 			console.tag("Result").log("Closed short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Result amount " +bfx.initAmout);
 			console.tag("Result").log("Success " +success+" Loss "+loss);
+			console.tag("Result").log("HPR " +hpr);
 			console.tag("Result").log("----------------------------------------------------");
 
 			pairs[respair]["short"] = false;
@@ -304,9 +314,11 @@ function closeShortPosition(respair, close){
 			pairs[respair]["stopLossPrice"]=0
 		}else{
 			bfx.updateBalance(function(){
+				var hpr = pairs[respair]["entryPrice"]/close;
 				console.tag("Result").log("Closed short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 				console.tag("Result").log("Result amount " +bfx.initAmout);
 				console.tag("Result").log("Success " +success+" Loss "+loss);
+				console.tag("Result").log("HPR " +hpr);
 				console.tag("Result").log("----------------------------------------------------");
 
 				pairs[respair]["short"] = false
@@ -322,9 +334,11 @@ function closeShortPosition(respair, close){
 }
 
 function getPositionSize(close){
-	return bfx.initAmout/((pairsList.length-openedPositions)*close);
-
+		return bfx.initAmout/((pairsList.length-openedPositions)*close);
+	
 }
+
+
 
 
 module.exports = Manager;
