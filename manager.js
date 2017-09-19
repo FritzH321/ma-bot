@@ -46,6 +46,8 @@ var success =0;
 //// number of lost trades
 var loss=0;
 
+var hpr =[];
+var avgTotalHpr = 1;
 
 function Manager(){
 	
@@ -66,7 +68,12 @@ function Manager(){
 			long: false,
 			stopLossPrice:0,
 			entryPrice:0,
-			entryAmount : 0 //temporary param
+			entryAmount : 0, //temporary param
+			positionCoeff:1,
+			success: 0,
+			loss:0,
+			hpr:[],
+			avgHpr:1
 
 		}
 	// 	prevValues[pair]={smaS: -Infinity,
@@ -197,22 +204,26 @@ function analyzeData(self, respair,data){
 		}
 	}else if(pairs[respair]["long"]){
 		//close long position at profit
-		if(smaS < smaL && pairs[respair]["entryPrice"]*1.005 < close){
-			success++;
+		if(smaS < smaL && pairs[respair]["entryPrice"]*1.01 < close){
+			success++; //total
+			pairs[respair]["success"]++; //per pair
 			closeLongPosition(respair, close);
 		// fix losses
 		}else if(close < pairs[respair]["stopLossPrice"]){
-			loss++;
+			loss++; //total
+			pairs[respair]["loss"]++; //per pair
 			closeLongPosition(respair, pairs[respair]["stopLossPrice"]);
 		}
 	}else if(pairs[respair]["short"]){
 		//close short position at profit
-		if(smaS > smaL && pairs[respair]["entryPrice"] > close*1.005){
-			success++;
+		if(smaS > smaL && pairs[respair]["entryPrice"] > close*1.01){
+			success++; //total
+			pairs[respair]["success"]++; //per pair
 			closeShortPosition(respair, close);
 		//fix losses
 		}else if(close > pairs[respair]["stopLossPrice"]){
-			loss++;
+			loss++; //total
+			pairs[respair]["loss"]++; //per pair
 			closeShortPosition(respair, pairs[respair]["stopLossPrice"]);
 		}
 	}
@@ -260,34 +271,34 @@ function openShortPosition(respair,close){
 
 function closeLongPosition(respair, close){
 	bfx.testTrade(respair, close, pairs[respair]["entryAmount"], "sell", function(){
-		if(backtest){
-			var hpr = close/pairs[respair]["entryPrice"];
-			console.tag("Result").log("Closed long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
-			console.tag("Result").log("Result amount " +bfx.initAmout);
-			console.tag("Result").log("Success " +success+" Loss "+loss);
-			console.tag("Result").log("HPR " +hpr);
-			console.tag("Result").log("----------------------------------------------------");
-
-			pairs[respair]["long"] = false;
-			pairs[respair]["entryPrice"] = 0;
-			pairs[respair]["entryAmount"] = 0; //temp
-			pairs[respair]["stopLossPrice"]=0
-		}else{
-			bfx.updateBalance(function(){
-				var hpr = close/pairs[respair]["entryPrice"];
-				console.tag("Result").log("Closed long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
-				console.tag("Result").log("Result amount " +bfx.initAmout);
-				console.tag("Result").log("Success " +success+" Loss "+loss);
-				console.tag("Result").log("HPR " +hpr);
-				console.tag("Result").log("----------------------------------------------------");
-
-				pairs[respair]["long"] = false
-				pairs[respair]["entryPrice"] = 0;
-				pairs[respair]["entryAmount"] = 0;//temp
-				pairs[respair]["stopLossPrice"]=0;
-								
-			});	
+		
+		hpr.push(close/pairs[respair]["entryPrice"]);
+		for (var elem of hpr){
+			avgTotalHpr=avgTotalHpr*elem;
 		}
+		avgTotalHpr = Math.pow(avgTotalHpr,1/hpr.length);
+
+		pairs[respair]["hpr"].push(close/pairs[respair]["entryPrice"]);
+		for (var elem of pairs[respair]["hpr"]){
+			pairs[respair]["avgHpr"]=pairs[respair]["avgHpr"]*elem;
+		}
+		pairs[respair]["avgHpr"] = Math.pow(pairs[respair]["avgHpr"],1/pairs[respair]["hpr"].length);
+
+
+		console.tag("Result").log("Closed long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
+		console.tag("Result").log("Result amount " +bfx.initAmout);
+		console.tag("Result").log("Total success " +success+" Loss "+loss);
+		console.tag("Result").log(respair+" success " +success+" Loss "+loss);
+		console.tag("Result").log("Average total HPR " +avgTotalHpr);
+		console.tag("Result").log("Average HPR for "+respair+" is " +pairs[respair]["avgHpr"]);
+
+		console.tag("Result").log("----------------------------------------------------");
+
+		pairs[respair]["long"] = false;
+		pairs[respair]["entryPrice"] = 0;
+		pairs[respair]["entryAmount"] = 0; //temp
+		pairs[respair]["stopLossPrice"]=0
+		
 						
 	});
 	openedPositions--;
@@ -295,41 +306,59 @@ function closeLongPosition(respair, close){
 
 function closeShortPosition(respair, close){
 	bfx.testTrade(respair, close, pairs[respair]["entryAmount"], "buy", function(){
-		if(backtest){
-			var hpr = pairs[respair]["entryPrice"]/close;
-			console.tag("Result").log("Closed short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
-			console.tag("Result").log("Result amount " +bfx.initAmout);
-			console.tag("Result").log("Success " +success+" Loss "+loss);
-			console.tag("Result").log("HPR " +hpr);
-			console.tag("Result").log("----------------------------------------------------");
-
-			pairs[respair]["short"] = false;
-			pairs[respair]["entryPrice"] = 0;
-			pairs[respair]["entryAmount"] = 0; //temp
-			pairs[respair]["stopLossPrice"]=0
-		}else{
-			bfx.updateBalance(function(){
-				var hpr = pairs[respair]["entryPrice"]/close;
-				console.tag("Result").log("Closed short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
-				console.tag("Result").log("Result amount " +bfx.initAmout);
-				console.tag("Result").log("Success " +success+" Loss "+loss);
-				console.tag("Result").log("HPR " +hpr);
-				console.tag("Result").log("----------------------------------------------------");
-
-				pairs[respair]["short"] = false
-				pairs[respair]["entryPrice"] = 0;
-				pairs[respair]["entryAmount"] = 0;//temp
-				pairs[respair]["stopLossPrice"]=0;
-								
-			});	
+		
+		hpr.push(pairs[respair]["entryPrice"]/close);
+		for (var elem of hpr){
+			avgTotalHpr=avgTotalHpr*elem;
 		}
+		avgTotalHpr = Math.pow(avgTotalHpr,1/hpr.length);
+
+		pairs[respair]["hpr"].push(pairs[respair]["entryPrice"]/close);
+		for (var elem of pairs[respair]["hpr"]){
+			pairs[respair]["avgHpr"]=pairs[respair]["avgHpr"]*elem;
+		}
+		pairs[respair]["avgHpr"] = Math.pow(pairs[respair]["avgHpr"],1/pairs[respair]["hpr"].length);
+
+
+		console.tag("Result").log("Closed short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
+		console.tag("Result").log("Result amount " +bfx.initAmout);
+		console.tag("Result").log("Total success " +success+" Loss "+loss);
+		console.tag("Result").log(respair+" success " +success+" Loss "+loss);
+		console.tag("Result").log("Average total HPR " +avgTotalHpr);
+		console.tag("Result").log("Average HPR for "+respair+" is " +pairs[respair]["avgHpr"]);
+
+		console.tag("Result").log("----------------------------------------------------");
+	
+		pairs[respair]["short"] = false;
+		pairs[respair]["entryPrice"] = 0;
+		pairs[respair]["entryAmount"] = 0; //temp
+		pairs[respair]["stopLossPrice"]=0
+		
 						
 	});
 	openedPositions--;
 }
 
 function getPositionSize(respair, close){
-	var positionSize = bfx.initAmout/((maxOpenedPosistions-openedPositions)*close);
+
+	if(pairs[respair]["hpr"].length %10 ==0){
+		if(pairs[respair]["avgHpr"]<1){
+			if(pairs[respair]["positionCoeff"] >0.1){
+				pairs[respair]["positionCoeff"]=pairs[respair]["positionCoeff"]-0.1;
+				console.tag("Result").log("Position coeff reduced "+pairs[respair]["positionCoeff"] );
+			}
+
+		}else{
+			if(pairs[respair]["positionCoeff"] < 1){
+				pairs[respair]["positionCoeff"]=pairs[respair]["positionCoeff"]+0.1;
+				console.tag("Result").log("Position coeff uplifted "+pairs[respair]["positionCoeff"] );
+
+			}
+
+		}
+	}
+
+	var positionSize = pairs[respair]["positionCoeff"]*bfx.initAmout/((maxOpenedPosistions-openedPositions)*close);
 	if(positionSize > pairsLimits[respair]){
 		return positionSize;
 	}else{
