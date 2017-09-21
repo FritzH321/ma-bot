@@ -32,9 +32,9 @@ const backtest = false;
 const period = 1800*1000;
 const stopLossCoeff = 0.017;
 const tradeCoeff = 1;
-
-
 const trendStrength = 15;
+
+
 const longSMA = 100;
 const shortSMA = 10;
 const adxPeriods =14;
@@ -83,10 +83,6 @@ function Manager(){
 			avgHpr:1
 
 		}
-	// 	prevValues[pair]={smaS: -Infinity,
-	// 					smaL: Infinity};
-		
-				
 	 }
 	
 	var self =this;
@@ -125,14 +121,9 @@ function Manager(){
 
 					pairs[resppair]["smaLArray"] = new SMA({period : longSMA, values : farray});
 					pairs[resppair]["smaSArray"] = new SMA({period : shortSMA, values : sarray});
-					pairs[resppair]["adxArray"] = new ADX({period : adxPeriods, close : farray, high : harray, low : larray});
-					
-				
-				
+					pairs[resppair]["adxArray"] = new ADX({period : adxPeriods, close : farray, high : harray, low : larray});	
 				});
 			}
-
-		
 		});
 	}
 }
@@ -145,7 +136,7 @@ Manager.prototype.runBot = function(){
 
 		if(backtest){
 			console.log("backtest is ON, live data is OFF");
-			var marketData = JSON.parse(fs.readFileSync(__dirname+'/BFX_ETHBTC_30m.json', 'utf8'));
+			var marketData = JSON.parse(fs.readFileSync(__dirname+'/BFX_LTCBTC_30m.json', 'utf8'));
 			
 			for(var candle of marketData){
 				
@@ -159,8 +150,6 @@ Manager.prototype.runBot = function(){
 			//get prices via websockets
 			bfx.getPrices();
 			
-
-
 			setTimeout(function(){
 				console.log("Bot is working");
 				//update tech indicators
@@ -174,22 +163,16 @@ Manager.prototype.runBot = function(){
 				}, period);
 
 				//find trade opportunity
-				while (true){
+				setInterval(function(){
 				
 					for(var pair in pairs){
 						if(bfx.prices[pair] !=undefined){
 							findTradeOpportunity(pair, parseFloat(bfx.prices[pair]["lastPrice"]));
-						}
-						
+						}		
 					}
-				}
-			
+				}, 5000);
 				
-			}, delay);
-			
-
-			
-			
+			}, delay);	
 		}
 };
 
@@ -216,50 +199,6 @@ function updateIndicators(self, respair,data){
 	pairs[respair]["adx"]= pairs[respair]["adxArray"].nextValue({close :close, high: high, low, low})
 	pairs[respair]["smaS"] = pairs[respair]["smaSArray"].nextValue(close);
 	pairs[respair]["smaL"] = pairs[respair]["smaLArray"].nextValue(close);
-
-	// if(pairs[respair]["adx"] != undefined && 
-	// 	pairs[respair]["adx"]["adx"] > trendStrength && 
-	// 	!pairs[respair]["long"]&& 
-	// 	!pairs[respair]["short"] &&
-	// 	openedPositions<maxOpenedPosistions){
-	// 	//open long position if conditions are met
-	// 	if(pairs[respair]["prevValues"]["smaS"] <pairs[respair]["prevValues"]["smaL"] && 
-	// 		pairs[respair]["smaS"]> pairs[respair]["smaL"] ){
-	// 		openLongPosition(respair, close);
-	// 	//open short position if conditions are met
-	// 	} else if(pairs[respair]["prevValues"]["smaS"] >pairs[respair]["prevValues"]["smaL"] && 
-	// 		pairs[respair]["smaS"] < pairs[respair]["smaL"]){
-	// 		openShortPosition(respair, close);
-	// 	}
-	// }else if(pairs[respair]["long"]){
-	// 	//close long position at profit
-	// 	if(pairs[respair]["smaS"] < pairs[respair]["smaL"] && 
-	// 		pairs[respair]["entryPrice"]*1.01 < close){
-	// 		success++; //total
-	// 		pairs[respair]["success"]++; //per pair
-	// 		closeLongPosition(respair, close);
-	// 	// fix losses
-	// 	}else if(close < pairs[respair]["stopLossPrice"]){
-	// 		loss++; //total
-	// 		pairs[respair]["loss"]++; //per pair
-	// 		closeLongPosition(respair, pairs[respair]["stopLossPrice"]);
-	// 	}
-	// }else if(pairs[respair]["short"]){
-	// 	//close short position at profit
-	// 	if(pairs[respair]["smaS"] > pairs[respair]["smaL"] && pairs[respair]["entryPrice"] > close*1.01){
-	// 		success++; //total
-	// 		pairs[respair]["success"]++; //per pair
-	// 		closeShortPosition(respair, close);
-	// 	//fix losses
-	// 	}else if(close > pairs[respair]["stopLossPrice"]){
-	// 		loss++; //total
-	// 		pairs[respair]["loss"]++; //per pair
-	// 		closeShortPosition(respair, pairs[respair]["stopLossPrice"]);
-	// 	}
-	// }
-
-	// pairs[respair]["prevValues"]["smaS"]=pairs[respair]["smaS"];
-	// pairs[respair]["prevValues"]["smaL"]=pairs[respair]["smaL"];
 
 }
 
@@ -416,19 +355,26 @@ function closeShortPosition(respair, close){
 
 function getPositionSize(respair, close){
 
-	if(pairs[respair]["hpr"].length %10 ==0){
+	if(pairs[respair]["hpr"].length %3 ==0){
 		if(pairs[respair]["avgHpr"]<1){
-			if(pairs[respair]["positionCoeff"] >0.1){
-				pairs[respair]["positionCoeff"]=pairs[respair]["positionCoeff"]-0.1;
-				console.tag("Result").log("Position coeff reduced "+pairs[respair]["positionCoeff"] );
+			
+			pairs[respair]["positionCoeff"]=pairs[respair]["positionCoeff"]-0.1;
+			if(pairs[respair]["positionCoeff"] <0.1 ){
+				pairs[respair]["positionCoeff"]=0.1;
 			}
+
+			console.tag("Result").log("Position coeff reduced "+pairs[respair]["positionCoeff"] );
+			
 
 		}else{
-			if(pairs[respair]["positionCoeff"] < 1){
-				pairs[respair]["positionCoeff"]=pairs[respair]["positionCoeff"]+0.1;
-				console.tag("Result").log("Position coeff uplifted "+pairs[respair]["positionCoeff"] );
-
+			
+			pairs[respair]["positionCoeff"]=pairs[respair]["positionCoeff"]+0.1;
+			if(pairs[respair]["positionCoeff"] >1 ){
+				pairs[respair]["positionCoeff"]=1;
 			}
+			console.tag("Result").log("Position coeff uplifted "+pairs[respair]["positionCoeff"] );
+
+			
 
 		}
 	}
