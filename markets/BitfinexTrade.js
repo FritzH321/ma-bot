@@ -2,6 +2,8 @@ var fs = require('fs');
 var utils = require("../utils");
 var request = require("request");
 var keys = JSON.parse(fs.readFileSync(__dirname+'/keys.json', 'utf8'));
+const BitfinexWS = require('bitfinex-api-node');
+const bws = new BitfinexWS().ws;
 var bitfinexApiNode = require("./api/bitfinex.js");
 var bitfinex = new bitfinexApiNode(keys["bitfinex"]["key"], keys["bitfinex"]["secret"]);
 const TAG = "Bitfinex";
@@ -12,8 +14,39 @@ function BitfinexTrade(pairs){
 	
 	this.initAmout = 100;
 	
-	
 	this.balanceMatrix = {};
+
+	this.prices={};
+	
+	bws.on('open', () => {
+	 	for(pair of pairs){
+	 		bws.subscribeTicker(pair);
+	 	}
+  
+	});
+
+
+
+	
+}
+
+
+BitfinexTrade.prototype.getPrices = function(){
+	var self = this;
+	bws.on('ticker', (pair, ticker) => {
+  		if(!self.prices.hasOwnProperty(pair)){
+			self.prices[pair]={
+				lastPrice: -Infinity,
+				high: -Infinity,
+				low: -Infinity
+			}
+		}
+		self.prices[pair]["lastPrice"] = ticker["lastPrice"];
+		self.prices[pair]["high"] = ticker["high"];
+		self.prices[pair]["low"] = ticker["low"];
+		//console.log(self.prices);
+
+	});
 }
 
 BitfinexTrade.prototype.updateBalance = function(callback){
@@ -240,5 +273,6 @@ BitfinexTrade.prototype.getBalance = function(pair, callback){
 }; */
 
 
+bws.on('error', console.error);
 
 module.exports =BitfinexTrade;

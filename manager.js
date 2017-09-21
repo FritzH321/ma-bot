@@ -1,6 +1,6 @@
 var fs = require('fs');
 var bfxTrade =  require("./markets/BitfinexTrade");
-var bfx = new bfxTrade();
+
 
 var utils = require("./utils");
 
@@ -22,6 +22,8 @@ const pairsLimits={"XMRBTC" :0.1,
 					"ETCBTC":0.1,
 					"DSHBTC":0.01,
 					"XRPBTC":10};
+
+
 
 var pairs = {}
 var prevValues={};
@@ -49,9 +51,11 @@ var loss=0;
 var hpr =[];
 var avgTotalHpr = 1;
 
+var bfx = new bfxTrade(pairsList);
+
 function Manager(){
 	
-	this.runBlock = true;
+	
 	console.log("Initializing list of pairs ");
 	//reduce maxOpenedPosistions only for backtesting
 	if(backtest){
@@ -63,8 +67,11 @@ function Manager(){
 			prevValues : {smaS: -Infinity,
 							smaL: Infinity},
 			smaSArray:{},
+			smaS:0,
 			smaLArray:{},
+			smaL:0,
 			adxArray :{},
+			adx:0,
 			long: false,
 			stopLossPrice:0,
 			entryPrice:0,
@@ -90,8 +97,7 @@ function Manager(){
 		pairs["ETHBTC"]["smaSArray"] = new SMA({period : shortSMA, values : []});
 		pairs["ETHBTC"]["adxArray"] = new ADX({period : adxPeriods, close : [], high : [], low : []});
 
-		self.runBlock = false;
-		console.tag("Trade").log("runBlock "+self.runBlock);
+		
 	}else{
 
 		//Add ADX for prod mode
@@ -99,8 +105,6 @@ function Manager(){
 			console.log("Initializing indicators ");
 			for(pair in pairs){
 				bfx.getHistData(pair, period/60000, longSMA, function(resppair, data){
-				
-				
 					var short = data.slice(data.length - shortSMA);
 					//close
 					var farray = [];
@@ -128,11 +132,7 @@ function Manager(){
 				});
 			}
 
-			setTimeout(function(){
-
-				self.runBlock = false;
-				console.tag("Trade").log("runBlock "+self.runBlock);
-			},10000)
+		
 		});
 	}
 }
@@ -142,69 +142,147 @@ function Manager(){
 Manager.prototype.runBot = function(){
 		var self = this;
 		console.log("Starting bot");
+
 		if(backtest){
 			console.log("backtest is ON, live data is OFF");
 			var marketData = JSON.parse(fs.readFileSync(__dirname+'/BFX_ETHBTC_30m.json', 'utf8'));
 			
 			for(var candle of marketData){
 				
-				analyzeData(self, "ETHBTC",candle);
+				updateIndicators(self, "ETHBTC",candle);
+				findTradeOpportunity("ETHBTC", candle[2]);
 			}
 		}else{
 			console.log("backtest is OFF, live data is ON");
 			var delay = period - Date.now() % period;
-			console.log("Start in "+delay/60000+" minutes");
+			console.log("Bot starts in "+delay/60000+" minutes");
+			//get prices via websockets
+			bfx.getPrices();
+			
+
+
 			setTimeout(function(){
 				console.log("Bot is working");
+				//update tech indicators
+				for(var pair in pairs){
+					updateIndicators(self, pair, bfx.prices);
+				}
 				setInterval(function(){
-					if(!self.runBlock){
-						for(var pair in pairs){
-							bfx.getTicker(pair, function(respair, data){
-								analyzeData(self, respair,data);
-							});
-						}
+					for(var pair in pairs){
+						updateIndicators(self, pair, bfx.prices);
 					}
 				}, period);
 
+				//find trade opportunity
+				while (true){
+				
+					for(var pair in pairs){
+						if(bfx.prices[pair] !=undefined){
+							findTradeOpportunity(pair, parseFloat(bfx.prices[pair]["lastPrice"]));
+						}
+						
+					}
+				}
+			
+				
 			}, delay);
+			
+
+			
 			
 		}
 };
 
 
 
-function analyzeData(self, respair,data){
+function updateIndicators(self, respair,data){
+
 	var close, high, low =0;
 	if(backtest){
 		close = data[2];
 		high = data[3];
 		low = data[4];
 	}else{
-		close = parseFloat(data["last_price"]);
-		high = parseFloat(data["high"]);
-		low = parseFloat(data["low"]);
+		close = parseFloat(data[respair]["lastPrice"]);
+		high = parseFloat(data[respair]["high"]);
+		low = parseFloat(data[respair]["low"]);
 
 	}
+	// Updating prev values
+	pairs[respair]["prevValues"]["smaS"]=pairs[respair]["smaS"];
+	pairs[respair]["prevValues"]["smaL"]=pairs[respair]["smaL"];
 
-	var adx= pairs[respair]["adxArray"].nextValue({close :close, high: high, low, low})
-	var smaS = pairs[respair]["smaSArray"].nextValue(close);
-	var smaL = pairs[respair]["smaLArray"].nextValue(close);
+	//assigning new sma and adx values
+	pairs[respair]["adx"]= pairs[respair]["adxArray"].nextValue({close :close, high: high, low, low})
+	pairs[respair]["smaS"] = pairs[respair]["smaSArray"].nextValue(close);
+	pairs[respair]["smaL"] = pairs[respair]["smaLArray"].nextValue(close);
 
-	if(adx != undefined && 
-		adx["adx"] > trendStrength && 
+	// if(pairs[respair]["adx"] != undefined && 
+	// 	pairs[respair]["adx"]["adx"] > trendStrength && 
+	// 	!pairs[respair]["long"]&& 
+	// 	!pairs[respair]["short"] &&
+	// 	openedPositions<maxOpenedPosistions){
+	// 	//open long position if conditions are met
+	// 	if(pairs[respair]["prevValues"]["smaS"] <pairs[respair]["prevValues"]["smaL"] && 
+	// 		pairs[respair]["smaS"]> pairs[respair]["smaL"] ){
+	// 		openLongPosition(respair, close);
+	// 	//open short position if conditions are met
+	// 	} else if(pairs[respair]["prevValues"]["smaS"] >pairs[respair]["prevValues"]["smaL"] && 
+	// 		pairs[respair]["smaS"] < pairs[respair]["smaL"]){
+	// 		openShortPosition(respair, close);
+	// 	}
+	// }else if(pairs[respair]["long"]){
+	// 	//close long position at profit
+	// 	if(pairs[respair]["smaS"] < pairs[respair]["smaL"] && 
+	// 		pairs[respair]["entryPrice"]*1.01 < close){
+	// 		success++; //total
+	// 		pairs[respair]["success"]++; //per pair
+	// 		closeLongPosition(respair, close);
+	// 	// fix losses
+	// 	}else if(close < pairs[respair]["stopLossPrice"]){
+	// 		loss++; //total
+	// 		pairs[respair]["loss"]++; //per pair
+	// 		closeLongPosition(respair, pairs[respair]["stopLossPrice"]);
+	// 	}
+	// }else if(pairs[respair]["short"]){
+	// 	//close short position at profit
+	// 	if(pairs[respair]["smaS"] > pairs[respair]["smaL"] && pairs[respair]["entryPrice"] > close*1.01){
+	// 		success++; //total
+	// 		pairs[respair]["success"]++; //per pair
+	// 		closeShortPosition(respair, close);
+	// 	//fix losses
+	// 	}else if(close > pairs[respair]["stopLossPrice"]){
+	// 		loss++; //total
+	// 		pairs[respair]["loss"]++; //per pair
+	// 		closeShortPosition(respair, pairs[respair]["stopLossPrice"]);
+	// 	}
+	// }
+
+	// pairs[respair]["prevValues"]["smaS"]=pairs[respair]["smaS"];
+	// pairs[respair]["prevValues"]["smaL"]=pairs[respair]["smaL"];
+
+}
+
+function findTradeOpportunity(respair, close){
+	
+	if(pairs[respair]["adx"] != undefined && 
+		pairs[respair]["adx"]["adx"] > trendStrength && 
 		!pairs[respair]["long"]&& 
 		!pairs[respair]["short"] &&
 		openedPositions<maxOpenedPosistions){
 		//open long position if conditions are met
-		if(pairs[respair]["prevValues"]["smaS"] <pairs[respair]["prevValues"]["smaL"] && smaS> smaL ){
+		if(pairs[respair]["prevValues"]["smaS"] <pairs[respair]["prevValues"]["smaL"] && 
+			pairs[respair]["smaS"]> pairs[respair]["smaL"] ){
 			openLongPosition(respair, close);
 		//open short position if conditions are met
-		} else if(pairs[respair]["prevValues"]["smaS"] >pairs[respair]["prevValues"]["smaL"] && smaS < smaL){
+		} else if(pairs[respair]["prevValues"]["smaS"] >pairs[respair]["prevValues"]["smaL"] && 
+			pairs[respair]["smaS"] < pairs[respair]["smaL"]){
 			openShortPosition(respair, close);
 		}
 	}else if(pairs[respair]["long"]){
 		//close long position at profit
-		if(smaS < smaL && pairs[respair]["entryPrice"]*1.01 < close){
+		if(pairs[respair]["smaS"] < pairs[respair]["smaL"] && 
+			pairs[respair]["entryPrice"]*1.01 < close){
 			success++; //total
 			pairs[respair]["success"]++; //per pair
 			closeLongPosition(respair, close);
@@ -216,7 +294,7 @@ function analyzeData(self, respair,data){
 		}
 	}else if(pairs[respair]["short"]){
 		//close short position at profit
-		if(smaS > smaL && pairs[respair]["entryPrice"] > close*1.01){
+		if(pairs[respair]["smaS"] > pairs[respair]["smaL"] && pairs[respair]["entryPrice"] > close*1.01){
 			success++; //total
 			pairs[respair]["success"]++; //per pair
 			closeShortPosition(respair, close);
@@ -227,9 +305,6 @@ function analyzeData(self, respair,data){
 			closeShortPosition(respair, pairs[respair]["stopLossPrice"]);
 		}
 	}
-
-	pairs[respair]["prevValues"]["smaS"]=smaS;
-	pairs[respair]["prevValues"]["smaL"]=smaL;
 
 }
 

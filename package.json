@@ -6,6 +6,7 @@
     "start": "node app.js"
   },
   "dependencies": {
+    "bitfinex-api-node": "^1.2.0",
     "body-parser": "1.15.2",
     "cfenv": "1.0.x",
     "ejs": "0.8.5",
