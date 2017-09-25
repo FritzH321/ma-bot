@@ -6,6 +6,9 @@ const BitfinexWS = require('bitfinex-api-node');
 const bws = new BitfinexWS().ws;
 var bitfinexApiNode = require("./api/bitfinex.js");
 var bitfinex = new bitfinexApiNode(keys["bitfinex"]["key"], keys["bitfinex"]["secret"]);
+
+const DBClient = require('./DBClient');
+const dbClient = new DBClient();
 const TAG = "Bitfinex";
 var console = process.console;
 
@@ -118,6 +121,7 @@ BitfinexTrade.prototype.getHistData = function(pair, period, limit, callback){
 }
 
 BitfinexTrade.prototype.testTrade = function(pair, price, amount, action,  callback){
+	dbClient.saveTrade(pair, action, price, amount);
 	switch(action){
 		case "buy":
 		this.initAmout-=amount*price;
