@@ -28,7 +28,7 @@ const pairsLimits={"XMRBTC" :0.1,
 var pairs = {}
 var prevValues={};
 
-const backtest = false;
+const backtest = true;
 const period = 1800*1000;
 const stopLossCoeff = 0.017;
 const tradeCoeff = 1;
@@ -73,6 +73,7 @@ function Manager(){
 			adxArray :{},
 			adx:0,
 			long: false,
+			short:false,
 			stopLossPrice:0,
 			entryPrice:0,
 			entryAmount : 0, //temporary param
@@ -377,7 +378,7 @@ function getPositionSize(respair, close){
 			
 
 		}
-	}
+}
 
 	var positionSize = pairs[respair]["positionCoeff"]*bfx.initAmout/((maxOpenedPosistions-openedPositions)*close);
 	if(positionSize > pairsLimits[respair]){
