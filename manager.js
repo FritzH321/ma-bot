@@ -6,7 +6,7 @@ var utils = require("./utils");
 
 const SMA = require('technicalindicators').SMA;
 const ADX = require('technicalindicators').ADX;
-
+const ATR = require('technicalindicators').ATR;
 // var smaSArray={};
 // var smaLArray={};
 // var adxArray={};
@@ -25,19 +25,20 @@ const pairsLimits={"XMRBTC" :0.1,
 
 
 
-var pairs = {}
+var pairs = {};
 var prevValues={};
 
-const backtest = true;
+const backtest = fale;
 const period = 1800*1000;
-const stopLossCoeff = 0.017;
-const tradeCoeff = 1;
+const accountRiskCoeff = 0.017;
+const stopLossCoeff = 2;
 const trendStrength = 15;
 
 
 const longSMA = 100;
 const shortSMA = 10;
 const adxPeriods =14;
+const atrPeriods =14;
 
 //max number of simultaneously opened positions
 var maxOpenedPosistions=5; 
@@ -72,6 +73,8 @@ function Manager(){
 			smaL:0,
 			adxArray :{},
 			adx:0,
+			atrArray :{},
+			atr:0,
 			long: false,
 			short:false,
 			stopLossPrice:0,
@@ -93,7 +96,7 @@ function Manager(){
 		pairs["ETHBTC"]["smaLArray"] = new SMA({period : longSMA, values : []});
 		pairs["ETHBTC"]["smaSArray"] = new SMA({period : shortSMA, values : []});
 		pairs["ETHBTC"]["adxArray"] = new ADX({period : adxPeriods, close : [], high : [], low : []});
-
+		pairs["ETHBTC"]["atrArray"] = new ATR({period : atrPeriods, close : [], high : [], low : []});
 		
 	}else{
 
@@ -123,6 +126,8 @@ function Manager(){
 					pairs[resppair]["smaLArray"] = new SMA({period : longSMA, values : farray});
 					pairs[resppair]["smaSArray"] = new SMA({period : shortSMA, values : sarray});
 					pairs[resppair]["adxArray"] = new ADX({period : adxPeriods, close : farray, high : harray, low : larray});	
+					pairs[resppair]["atrArray"] = new ATR({period : atrPeriods, close : farray, high : harray, low : larray});	
+
 				});
 			}
 		});
@@ -137,7 +142,7 @@ Manager.prototype.runBot = function(){
 
 		if(backtest){
 			console.log("backtest is ON, live data is OFF");
-			var marketData = JSON.parse(fs.readFileSync(__dirname+'/BFX_LTCBTC_30m.json', 'utf8'));
+			var marketData = JSON.parse(fs.readFileSync(__dirname+'/datasets/BFX_ETHBTC_30m.json', 'utf8'));
 			
 			for(var candle of marketData){
 				
@@ -198,6 +203,7 @@ function updateIndicators(self, respair,data){
 
 	//assigning new sma and adx values
 	pairs[respair]["adx"]= pairs[respair]["adxArray"].nextValue({close :close, high: high, low, low})
+	pairs[respair]["atr"]= pairs[respair]["atrArray"].nextValue({close :close, high: high, low, low})
 	pairs[respair]["smaS"] = pairs[respair]["smaSArray"].nextValue(close);
 	pairs[respair]["smaL"] = pairs[respair]["smaLArray"].nextValue(close);
 
@@ -249,11 +255,11 @@ function findTradeOpportunity(respair, close){
 }
 
 function openLongPosition(respair, close){
+	pairs[respair]["stopLossPrice"] = close- stopLossCoeff* pairs[respair]["atr"];
 	pairs[respair]["entryAmount"] = getPositionSize(respair, close) //temp
 	if(pairs[respair]["entryAmount"] >0){	
 		bfx.testTrade(respair, close, pairs[respair]["entryAmount"], "buy", function(){
 			
-			pairs[respair]["stopLossPrice"] = close*(1-stopLossCoeff*maxOpenedPosistions);
 			pairs[respair]["entryPrice"] = close;
 			console.tag("Result").log("Opened long "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Stop loss price " +pairs[respair]["stopLossPrice"]);
@@ -267,11 +273,11 @@ function openLongPosition(respair, close){
 }
 
 function openShortPosition(respair,close){
+	pairs[respair]["stopLossPrice"] = close+ stopLossCoeff* pairs[respair]["atr"];
 	pairs[respair]["entryAmount"] = getPositionSize(respair, close) //temp
 	if(pairs[respair]["entryAmount"] >0){
 		bfx.testTrade(respair, close, pairs[respair]["entryAmount"], "sell", function(){
-			
-			pairs[respair]["stopLossPrice"] = close*(1+stopLossCoeff*maxOpenedPosistions);
+						
 			pairs[respair]["entryPrice"] = close;
 			console.tag("Result").log("Opened short "+respair+" " +pairs[respair]["entryAmount"]+" at "+ close);
 			console.tag("Result").log("Stop loss price " +pairs[respair]["stopLossPrice"]);
@@ -378,9 +384,20 @@ function getPositionSize(respair, close){
 			
 
 		}
-}
+	}
+	var tradeRisk = 0;
+	
+	if(pairs[respair]["stopLossPrice"] < close){
+		
+		tradeRisk=Math.max.apply(Math,[(pairs[respair]["stopLossPrice"]/close), accountRiskCoeff]);
+	}else{
+		tradeRisk=Math.max.apply(Math, [(close/pairs[respair]["stopLossPrice"]), accountRiskCoeff]);
 
-	var positionSize = pairs[respair]["positionCoeff"]*bfx.initAmout/((maxOpenedPosistions-openedPositions)*close);
+	}
+	console.log(tradeRisk);
+	//var positionSize = pairs[respair]["positionCoeff"]*bfx.initAmout/((maxOpenedPosistions-openedPositions)*close);
+	var positionSize = ((bfx.initAmout/(maxOpenedPosistions-openedPositions))*pairs[respair]["positionCoeff"]*tradeRisk)/close;
+
 	if(positionSize > pairsLimits[respair]){
 		return positionSize;
 	}else{

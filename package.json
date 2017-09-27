@@ -1,6 +1,6 @@
 {
   "name": "ma-bot",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "scripts": {
     "start": "node app.js"
@@ -11,6 +11,7 @@
     "cfenv": "1.0.x",
     "ejs": "0.8.5",
     "express": "^4.15.4",
+    "mongodb": "^2.2.31",
     "nonce": "1.0.4",
     "request": "2.78.0",
     "scribe-js": "2.0.4",
